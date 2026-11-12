@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+design-mission5/
 
 # Local environment files may contain credentials or other secrets.
 .env

@@ -5,14 +5,52 @@ import { useEffect, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { gsap } from 'gsap'
 import * as THREE from 'three'
-import { cinemaLayout } from '../../data/cinemaLayout'
-import { locateSeat, rowToWorldPosition, seatToWorldPosition } from '../../data/cinemaLayout'
+import { BoxGeometry, InstancedMesh, MeshBasicMaterial, MeshStandardMaterial, Object3D } from 'three'
+import { cinemaGeometry, cinemaLayout, locateSeat, rowToWorldPosition, screenCenter } from '../../data/cinemaLayout'
 import { CinemaEnvironment } from './CinemaEnvironment'
 import { CinemaScreen } from './CinemaScreen'
-import { CinemaSeat } from './CinemaSeat'
+import { CinemaSeatBatch } from './CinemaSeat'
+import type { VideoTexture } from 'three'
 
-const overviewPosition: [number, number, number] = [14, 13, 17]
-const overviewTarget: [number, number, number] = [0, 1.4, 0]
+// Keep the overview inside the room shell so the walls and ceiling do not hide it.
+const overviewPosition: [number, number, number] = [0, 5.8, 15.9]
+const overviewTarget: [number, number, number] = screenCenter
+// Fixed vertical field of view: 44° (~74° horizontal at 16:9). A portrait
+// viewport therefore shows less horizontal room, as a real fixed lens would.
+const CAMERA_VERTICAL_FOV_DEGREES = 44
+const rowPlatformGeometry = new BoxGeometry(cinemaGeometry.roomWidth, cinemaGeometry.rowRise, cinemaGeometry.rowSpacing)
+const aisleGuideGeometry = new BoxGeometry(cinemaGeometry.aisleMarkerWidth, cinemaGeometry.aisleMarkerHeight, cinemaGeometry.rowSpacing - cinemaGeometry.aisleMarkerInset)
+const rowPlatformMaterial = new MeshStandardMaterial({ color: '#211e23', roughness: 0.96 })
+const aisleGuideMaterial = new MeshBasicMaterial({ color: '#8a705f' })
+
+function RowPlatforms() {
+  const platforms = useRef<InstancedMesh>(null)
+  const aisleGuides = useRef<InstancedMesh>(null)
+
+  useEffect(() => {
+    const object = new Object3D()
+    cinemaLayout.rows.forEach((row, rowIndex) => {
+      const [x, y, z] = rowToWorldPosition(row.logicalDepth)
+      object.position.set(x, y - cinemaGeometry.rowRise / 2, z)
+      object.updateMatrix()
+      platforms.current?.setMatrixAt(rowIndex, object.matrix)
+      cinemaLayout.aisles.forEach((aisleX, aisleIndex) => {
+        object.position.set(aisleX, y + 0.012, z)
+        object.updateMatrix()
+        aisleGuides.current?.setMatrixAt(rowIndex * cinemaLayout.aisles.length + aisleIndex, object.matrix)
+      })
+    })
+    if (platforms.current) platforms.current.instanceMatrix.needsUpdate = true
+    if (aisleGuides.current) aisleGuides.current.instanceMatrix.needsUpdate = true
+  }, [])
+
+  return (
+    <group dispose={null}>
+      <instancedMesh ref={platforms} args={[rowPlatformGeometry, rowPlatformMaterial, cinemaLayout.rows.length]} />
+      <instancedMesh ref={aisleGuides} args={[aisleGuideGeometry, aisleGuideMaterial, cinemaLayout.rows.length * cinemaLayout.aisles.length]} />
+    </group>
+  )
+}
 
 function CameraDirector({ seatId, centerRequest }: { seatId: string | null; centerRequest: number }) {
   const { camera, gl } = useThree()
@@ -37,6 +75,8 @@ function CameraDirector({ seatId, centerRequest }: { seatId: string | null; cent
     const endLook = new THREE.Vector3(...targetLook)
     const progress = { value: 0 }
 
+    gsap.killTweensOf(yaw)
+    gsap.killTweensOf(pitch)
     mode.current = 'transition'
     const tween = gsap.to(progress, {
       value: 1,
@@ -71,8 +111,11 @@ function CameraDirector({ seatId, centerRequest }: { seatId: string | null; cent
     const direction = destination.sub(camera.position).normalize()
     const targetYaw = Math.atan2(-direction.x, -direction.z)
     const targetPitch = Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1))
-    gsap.to(yaw, { current: targetYaw, duration: 0.45, ease: 'power2.out' })
-    gsap.to(pitch, { current: targetPitch, duration: 0.45, ease: 'power2.out' })
+    gsap.killTweensOf(yaw)
+    gsap.killTweensOf(pitch)
+    const yawTween = gsap.to(yaw, { current: targetYaw, duration: 0.45, ease: 'power2.out' })
+    const pitchTween = gsap.to(pitch, { current: targetPitch, duration: 0.45, ease: 'power2.out' })
+    return () => { yawTween.kill(); pitchTween.kill() }
   }, [camera, centerRequest, seatId])
 
   useEffect(() => {
@@ -121,7 +164,7 @@ function CameraDirector({ seatId, centerRequest }: { seatId: string | null; cent
     minDistance={8}
     maxDistance={34}
     minPolarAngle={0.48}
-    maxPolarAngle={1.42}
+    maxPolarAngle={1.52}
     minAzimuthAngle={-1.12}
     maxAzimuthAngle={1.12}
     rotateSpeed={0.55}
@@ -129,41 +172,28 @@ function CameraDirector({ seatId, centerRequest }: { seatId: string | null; cent
   />
 }
 
-function Auditorium() {
+function Auditorium({ texture, videoWidth, videoHeight, available }: { texture: VideoTexture; videoWidth: number; videoHeight: number; available: boolean }) {
   return (
     <>
       <CinemaEnvironment />
-      <CinemaScreen />
-      {cinemaLayout.rows.flatMap((row) => row.seats.map((seat) => <CinemaSeat key={seat.id} seat={seat} position={seatToWorldPosition(seat)} />))}
-      {cinemaLayout.rows.map((row) => (
-        <group key={`step-${row.id}`} position={rowToWorldPosition(row.logicalDepth)}>
-          <mesh position={[0, -0.15, 0]}>
-            <boxGeometry args={[17, 0.12, 0.15]} />
-            <meshStandardMaterial color="#26202a" roughness={0.95} />
-          </mesh>
-        </group>
-      ))}
-      {cinemaLayout.aisles.map((x) => (
-        <mesh key={x} position={[x, -0.025, 1]}>
-          <boxGeometry args={[0.12, 0.025, 16.3]} />
-          <meshBasicMaterial color="#d34d77" />
-        </mesh>
-      ))}
+      <CinemaScreen texture={texture} videoWidth={videoWidth} videoHeight={videoHeight} available={available} />
+      <CinemaSeatBatch />
+      <RowPlatforms />
     </>
   )
 }
 
-export default function CinemaScene({ seatId, centerRequest }: { seatId: string | null; centerRequest: number }) {
+export default function CinemaScene({ seatId, centerRequest, texture, videoWidth, videoHeight, available }: { seatId: string | null; centerRequest: number; texture: VideoTexture; videoWidth: number; videoHeight: number; available: boolean }) {
   return (
     <Canvas
-      camera={{ position: overviewPosition, fov: 44 }}
+      camera={{ position: overviewPosition, fov: CAMERA_VERTICAL_FOV_DEGREES }}
       dpr={[1, 1.35]}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       style={{ width: '100%', height: '100%', touchAction: 'none' }}
     >
       <color attach="background" args={['#09080d']} />
       <fog attach="fog" args={['#09080d', 21, 42]} />
-      <Suspense fallback={null}><Auditorium /></Suspense>
+      <Suspense fallback={null}><Auditorium texture={texture} videoWidth={videoWidth} videoHeight={videoHeight} available={available} /></Suspense>
       <CameraDirector seatId={seatId} centerRequest={centerRequest} />
     </Canvas>
   )

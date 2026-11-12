@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cinemaLayout, isAisleColumn } from '../../data/cinemaLayout'
 import type { CinemaSeatData } from '../../types/cinema'
 
@@ -15,15 +16,16 @@ function seatLabel(seat: CinemaSeatData) {
 }
 
 export function SeatMap2D({ selectedSeats, onToggleSeat }: SeatMap2DProps) {
+  const [mapZoom, setMapZoom] = useState(1)
   const rows = [...cinemaLayout.rows].reverse()
   return (
-    <section className="map-panel" aria-label="Mapa de assentos da Sala 6">
+    <section className="map-panel" aria-label="Mapa demonstrativo de assentos">
       <div className="map-heading">
-        <div><span className="eyebrow"><span className="eyebrow-line" /> MAPA DA SALA</span><h2>Escolha sua perspectiva.</h2><p>Selecione até dois assentos disponíveis para visualizar em 3D.</p></div>
-        <span className="map-room-tag">SALA 6 <i>·</i> CONVENCIONAL</span>
+        <div><span className="eyebrow"><span className="eyebrow-line" /> MAPA DA SALA</span><h2>Mapa de assentos</h2><p>Selecione até dois lugares disponíveis.</p></div>
+        <div className="map-tools"><span className="map-room-tag">SALA CONVENCIONAL</span><div className="map-zoom-controls" aria-label="Zoom do mapa"><button type="button" aria-label="Diminuir zoom do mapa" disabled={mapZoom <= 0.8} onClick={() => setMapZoom((zoom) => Math.max(0.8, Math.round((zoom - 0.1) * 10) / 10))}>−</button><span>{Math.round(mapZoom * 100)}%</span><button type="button" aria-label="Aumentar zoom do mapa" disabled={mapZoom >= 1.4} onClick={() => setMapZoom((zoom) => Math.min(1.4, Math.round((zoom + 0.1) * 10) / 10))}>+</button></div></div>
       </div>
       <div className="map-scroll" role="region" aria-label="Mapa de assentos, role horizontalmente em telas pequenas" tabIndex={0}>
-        <div className="map-seating-area">
+        <div className="map-seating-area" style={{ zoom: mapZoom }}>
           <div className="seat-grid-head"><span>FILEIRA</span><span>ASSENTOS <small>· CORREDOR CENTRAL</small></span></div>
           <div className="seat-rows">
             {rows.map((row) => <div className="seat-map-row" key={row.id}>
@@ -56,7 +58,7 @@ export function SeatMap2D({ selectedSeats, onToggleSeat }: SeatMap2DProps) {
           <div className="map-key"><span><i className="key-available" /> Disponível</span><span><i className="key-selected" /> Selecionado</span><span><i className="key-occupied">●</i> Ocupado</span><span><i className="key-unavailable">⊘</i> Bloqueado</span><span><i className="key-pending">·</i> Pendente</span></div>
         </div>
       </div>
-      <p className="map-disclaimer">Mapa estimado a partir da referência visual. Confirme os lugares com o provedor antes da compra.</p>
+      <p className="map-disclaimer">Disposição demonstrativa. Assentos indisponíveis não podem ser selecionados.</p>
     </section>
   )
 }

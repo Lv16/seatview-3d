@@ -18,6 +18,12 @@ npm run dev
 
 Abra o endereço local exibido pelo Vite. No mapa da Sala 6, selecione até dois assentos disponíveis e escolha **Visualizar em 3D**. A seleção e a disponibilidade são dados locais de demonstração.
 
+## Vídeo de demonstração
+
+Adicione um vídeo autorizado em `public/videos/seatview-demo.mp4`. A aplicação usa esse arquivo local diretamente na superfície 3D da tela. Sem o arquivo, a cena demonstrativa continua disponível e os controles informam discretamente que a projeção está indisponível. A reprodução começa somente após interação do usuário e inicia sem áudio.
+
+Prefira MP4 com vídeo H.264 e áudio AAC, em proporção 16:9. WebM (VP9/Opus) pode ser usado em navegadores compatíveis. O vídeo é ajustado sem distorção; proporções diferentes recebem barras dentro da tela.
+
 ## Verificações
 
 ```bash
